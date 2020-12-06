@@ -51,6 +51,14 @@ def _build_ADJ_Mat(data_list, states):
     return adj
 
 def build_data():
+    """
+    Function builds the adjacency matrix, feature vector and dependent variable vector
+    from CDC data
+    Returns:
+      Adj. Numpy array of shape [x, 51, 51]. Adjacency matrix for the graph
+      X: Numpy array of shape [x, 51, days]. Nodes in graph store new cases for n days.
+      y: Numpy array of shape [x, 1]. Stores new cases for every 'days+1'.
+    """
     data = pd.read_csv("../Clean_Data/Clean_CDC.csv")
     data.State = data.State.replace('NYC', 'NY')
     NYData = data[data.State == 'NY'].groupby('Date', as_index=False).sum()
