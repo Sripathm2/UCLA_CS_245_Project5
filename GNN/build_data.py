@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def _build_data(data, days):
+def _build_state_data(data, days):
     """
     Function builds the adj matrix and inital featuer matrix for 
     input in MPNN network
@@ -34,11 +34,13 @@ def _build_ADJ_Mat(data_list, states):
     bstates = pd.read_csv("../Clean_Data/bstates.csv").values
     states_idx = {states[i]:i for i in range(0,len(states))}
     statePops = pd.read_csv("../Clean_Data/State_Pops.csv").values.tolist()
+    statePops.append(['USA', sum([i[1] for i in statePops])])
     statePops = {a:b for a,b in statePops}
     bstates = {i[0]:[x for x in i[1:] if x==x] for i in bstates}
+    bstates['USA'] = states[:-1]
     adj = []
     for data in data_list:
-        mat = np.zeros((51,51))
+        mat = np.zeros((len(states),len(states)))
         average = np.mean(data, axis=1)
         for state in bstates:
             for bstate in bstates[state]:
@@ -65,8 +67,10 @@ def build_data():
     data = data[data.State != 'NY']
     data = data[~data.State.isin(["FSG", "FSM", "RMI", "AS", "PR", "GU", "MP", "PW", "VI"])]
     data = pd.concat((data, NYData)).replace(np.nan, 'NY')
+    data_usa = data.groupby('Date').sum().reset_index()
     data = data.pivot(index='Date', columns='State', values=['New_cases'])
-    Adj, X, y = _build_data(data, 5)
+    data[("New_cases","USA")] = data_usa["New_cases"].values
+    Adj, X, y = _build_state_data(data, 5)
     return Adj, X, y
 
 if __name__ == "__main__":
