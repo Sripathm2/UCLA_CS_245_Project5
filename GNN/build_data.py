@@ -31,9 +31,12 @@ def _build_state_data(data, feature_window, network_window):
     X_size = X.shape[0]
     X = [X[i:i+network_window,:,:]
          for i in range(0, size-network_window,1)]
+    """
     y_size = y.size
     y = [y[i:i+network_window,:]
          for i in range(0, size-network_window,1)]
+    """
+    y = y[network_window:,:]
     Adj = np.stack(Adj, axis=0)
     X = np.stack(X, axis=0)
     y = np.stack(y, axis=0)
@@ -64,14 +67,11 @@ def _build_ADJ_Mat(data_list, states):
                     average[states_idx[state]]/statePops[state])-(
                         average[states_idx[bstate]]/statePops[bstate])
         adj.append(mat)
-        #adj.append(sp_matrix_to_sp_tensor(mat))
-    #adj = np.dstack(adj)
-    #adj = np.rollaxis(adj, 2, 0)
     adj = np.stack(adj, axis=0)
     print("SH: ", adj.shape)
     return adj
 
-def build_data(feature_window, network_window=5):
+def build_data(scaler, feature_window, network_window=5):
     """
     Function builds the adjacency matrix, feature vector and dependent variable vector
     from CDC data
@@ -91,8 +91,11 @@ def build_data(feature_window, network_window=5):
     data_usa = data.groupby('Date').sum().reset_index()
     data = data.pivot(index='Date', columns='State', values=['New_cases'])
     data[("New_cases","USA")] = data_usa["New_cases"].values
+    for col in data.columns:
+        data[col] = scaler.fit_transform(np.reshape(data[col].values, (-1, 1)))
     Adj, X, y = _build_state_data(data, feature_window, network_window)
-    return Adj, X, y
+    states = [i[1] for i in data.columns]
+    return Adj, X, y, states
 
 if __name__ == "__main__":
-    Adj, X, y = build_data()
+    Adj, X, y, states = build_data()

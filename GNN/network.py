@@ -3,9 +3,6 @@ from scipy import sparse
 import tensorflow as tf
 import spektral
 from spektral.layers.ops import sp_matrix_to_sp_tensor
-from spektral.datasets.mnist import MNIST
-
-data = MNIST()
 
 
 class Net(tf.keras.Model):
@@ -31,12 +28,12 @@ class Net(tf.keras.Model):
         self._window = window
         self._batch_size = batch_size
         for i in range(1,window+1):
-            self.build_MPNN_unit(dropout, i)
+            self.build_MPNN_unit(dropout, str(i))
         self.LSTM1 = tf.keras.layers.LSTM(lstm_output, return_sequences=True)
         self.LSTM2 = tf.keras.layers.LSTM(lstm_output, return_state=True)
-        self.Lin = tf.keras.layers.Dense(52, input_shape=(6, 52), activation="relu")
+        self.Lin = tf.keras.layers.Dense(1, activation="relu")
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-        self.loss_tracker = tf.keras.metrics.Mean(name="loss")
+        #self.loss_tracker = tf.keras.metrics.Mean(name="loss") Don't need for batchsize 1
         self.mse_metric = tf.keras.metrics.MeanSquaredError(name="mse")
 
     def build_MPNN_unit(self, dropout, net_id=1):
@@ -50,7 +47,7 @@ class Net(tf.keras.Model):
         """
         L1 = []
         L1.extend((
-            spektral.layers.MessagePassing(aggregate='sum',
+            spektral.layers.MessagePassing(aggregate='mean',
                                           activation='relu'),
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.Dropout(dropout)))
@@ -73,6 +70,7 @@ class Net(tf.keras.Model):
           Tensor. [x, z*2]. ouput of passig a message through the MPNN
         """
         L1, L2 = self._nets[net_id]
+        Adj = sp_matrix_to_sp_tensor(Adj)
         y = None
         for i in range(0,len(L1)):
             if i == 0: # MessagePassing layer
@@ -89,24 +87,33 @@ class Net(tf.keras.Model):
         return tf.concat((H1,H2), axis=1)
 
     def train(self, model_input, y):
+        """
+        Function Trains the network
+        args:
+          model_input: [Adj, X]
+            Adj: Tensor. [:, x, x]. Adjacency matrix of the graph
+            X: Tensor. [:, x, z]. Node feature matrix
+          y: Tensor. [x, 1]
+        returns:
+        """
         Adj, X = model_input
-        Adj_shape = Adj.shape[0]
-        for i in range(0, adj_shape):
-            Adj[i] = tf.map_fn(fn=sp_matrix_to_sp_tensor, elems=Adj[i])
-        print(Adj.shape)
-        return
+        Adj = tf.squeeze(
+            tf.convert_to_tensor(Adj, dtype=tf.float32))
+        X = tf.convert_to_tensor(X[0], dtype=tf.float32)
+        y = tf.convert_to_tensor(y[0], dtype=tf.float32)
         with tf.GradientTape() as tape:
-            y_pred = self(model_input, training=True)
+            y_pred = self((Adj, X), training=True)
             loss = tf.keras.losses.mean_squared_error(y, y_pred)
 
-        trainable_vars = self.trainable_vars
-        gradients = tape.gradients(loss, trainable_vars)
-        self.optimizer.apply_gradients(zip(graidents, trainable_vars))
+        trainable_vars = self.trainable_variables
+        gradients = tape.gradient(loss, trainable_vars)
+        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
 
         # metrics
-        loss_tracker.update_state(loss)
-        mae_metric.update_state(y, y_pred)
-        return {"loss": loss_tracker.result(), "mse": mse_metric.result()}
+        # self.loss_tracker.update_state(loss)
+        self.mse_metric.update_state(y, y_pred)
+        # return {"loss": self.loss_tracker.result().numpy(),
+        return {"mse": self.mse_metric.result().numpy()}
     
     def call(self, model_input, training=True):
         """
@@ -115,28 +122,17 @@ class Net(tf.keras.Model):
           Adj: Tensor. [:, x, y]. Adjacency matrix of the graph
           X: Tensor. [:, x, z]. Node feature matrix
         returns:
-        
+          x: Tensor. [x, 1]. Output of the neural net
         """
         Adj, X = model_input
-        print(Adj.shape)
-        print(X.shape)
+        if not training:
+            Adj = sp_matrix_to_sp_tensor(Adj)
         LSTM_input = []
         for i in range(0, self._window):
             LSTM_input.append(
-                self.run_MPNN_unit(Adj[:,i,:,:],
-                                   X[:,i,:,:], net_id=i+1))
-        """
-        H1 = self.run_MPNN_unit(Adj[0], X[0], net_id=1)
-        H2 = self.run_MPNN_unit(Adj[1], X[1], net_id=2)
-        H3 = self.run_MPNN_unit(Adj[2], X[2], net_id=3)
-        H4 = self.run_MPNN_unit(Adj[3], X[3], net_id=4)
-        H5 = self.run_MPNN_unit(Adj[4], X[4], net_id=5)
-        H6 = self.run_MPNN_unit(Adj[5], X[5], net_id=6)
-        LSTM_input = [H1, H2, H3, H4, H5, H6]
-        #for i in range(0,len(LSTM_input)):
-         #   LSTM_input[i] = tf.expand_dims(LSTM_input[i], axis=0)
-        """
-        x = tf.stack(LSTM_input, axis=0)
+                self.run_MPNN_unit(Adj[i,:,:],
+                                   X[i,:,:], net_id=str(i+1)))
+        x = tf.stack(LSTM_input, axis=1)
         x = self.LSTM1(x)
         output, final_memory_state, final_carry_state = self.LSTM2(x)
         #x = X+x
