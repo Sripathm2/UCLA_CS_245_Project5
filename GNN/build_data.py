@@ -1,26 +1,42 @@
 import pandas as pd
 import numpy as np
+from spektral.layers.ops import sp_matrix_to_sp_tensor
 
-def _build_state_data(data, days):
+def _build_state_data(data, feature_window, network_window):
     """
     Function builds the adj matrix and inital featuer matrix for 
     input in MPNN network
     args:
       data: pandas DataFrame. Contains new cases data for all states
-      days: Int. The number of days stored be each node
+      feature_window: Number of days to use for each node.
+      network_window: Number of networks in model
     Returns:
       Adj. Numpy array of shape [x, 51, 51]. Adjacency matrix for the graph
       X: Numpy array of shape [x, 51, days]. Nodes in graph store new cases for n days.
       y: Numpy array of shape [x, 1]. Stores new cases for every 'days+1'.
     """
-    y = data.iloc[days:,:].values
-    X = [data.iloc[i:i+days,:].values.T
-         for i in range(0,data.shape[0]-days,1)]
+    y = data.iloc[feature_window:,:]
+    X = [data.iloc[i:i+feature_window,:].values.T
+         for i in range(0,data.shape[0]-feature_window,1)]
     states = [i[1] for i in data.columns.values]
     Adj = _build_ADJ_Mat(X, states)
     X = np.dstack(X)
     X = np.rollaxis(X, 2, 0)
     y = np.expand_dims(y,2)
+
+    # Reshape for network window
+    size = Adj.shape[0]
+    Adj = [Adj[i:i+network_window,:,:]
+           for i in range(0, size-network_window,1)]
+    X_size = X.shape[0]
+    X = [X[i:i+network_window,:,:]
+         for i in range(0, size-network_window,1)]
+    y_size = y.size
+    y = [y[i:i+network_window,:]
+         for i in range(0, size-network_window,1)]
+    Adj = np.stack(Adj, axis=0)
+    X = np.stack(X, axis=0)
+    y = np.stack(y, axis=0)
     return Adj, X, y
 
 def _build_ADJ_Mat(data_list, states):
@@ -48,11 +64,14 @@ def _build_ADJ_Mat(data_list, states):
                     average[states_idx[state]]/statePops[state])-(
                         average[states_idx[bstate]]/statePops[bstate])
         adj.append(mat)
-    adj = np.dstack(adj)
-    adj = np.rollaxis(adj, 2, 0)
+        #adj.append(sp_matrix_to_sp_tensor(mat))
+    #adj = np.dstack(adj)
+    #adj = np.rollaxis(adj, 2, 0)
+    adj = np.stack(adj, axis=0)
+    print("SH: ", adj.shape)
     return adj
 
-def build_data():
+def build_data(feature_window, network_window=5):
     """
     Function builds the adjacency matrix, feature vector and dependent variable vector
     from CDC data
@@ -60,6 +79,8 @@ def build_data():
       Adj. Numpy array of shape [x, 51, 51]. Adjacency matrix for the graph
       X: Numpy array of shape [x, 51, days]. Nodes in graph store new cases for n days.
       y: Numpy array of shape [x, 1]. Stores new cases for every 'days+1'.
+      feature_window: Number of days to use for each node.
+      network_window: Number of networks in model
     """
     data = pd.read_csv("../Clean_Data/Clean_CDC.csv")
     data.State = data.State.replace('NYC', 'NY')
@@ -70,7 +91,7 @@ def build_data():
     data_usa = data.groupby('Date').sum().reset_index()
     data = data.pivot(index='Date', columns='State', values=['New_cases'])
     data[("New_cases","USA")] = data_usa["New_cases"].values
-    Adj, X, y = _build_state_data(data, 5)
+    Adj, X, y = _build_state_data(data, feature_window, network_window)
     return Adj, X, y
 
 if __name__ == "__main__":
