@@ -52,12 +52,14 @@ def train_model(training_data, validation_data, hparams):
                 epoch_mse.append(mse)
                 print("epoch: {}, mse: {}".format(i, mse))
                 loss_out = scaler.inverse_transform(np.reshape([mse], (-1, 1)))
-                loss_writer.writerow([i]+loss_out)
+                loss_out = [i, loss_out[0][0]]
+                loss_writer.writerow(loss_out)
                 # Validation ? 
             print("epoch: {}, Average_mse: {}, Validation_mse: ?".format(i, sum(epoch_mse)/len(epoch_mse)))
             loss_out = scaler.inverse_transform(
-                np.reshape([sum(epoch_mse)/len(epoch_mse)], (-1, 1))) 
-            loss_writer.writerow([i, 0]+loss_out)
+                np.reshape([sum(epoch_mse)/len(epoch_mse)], (-1, 1)))
+            loss_out = [i, 0, loss_out[0][0]]
+            loss_writer.writerow(loss_out)
     model.save_weights(checkpoint)
     return
 
