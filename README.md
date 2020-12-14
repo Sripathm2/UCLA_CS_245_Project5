@@ -27,3 +27,36 @@ CDC State wise daily infection data
 ## Runing the project 
 Please use Python3 for  data cleaning scripts in Cleaner_scripts. The raw data file is expected to be in the same folder as the scripts. 
 For the jupyter noteboks we can use the notebooks from jupyter aong with the packages. you can also use the google collab for running the code.
+
+### ARIMA & LSTM
+You can find the ARIMA and LSTM model under ``jupyter/``. Simply run them and and it should generate the ARIMA and LSTM analysis/forecasts.
+
+### GNN
+You can find the graph neural network under ``GNN/``. 
+
+|File name|Content|
+|---------|-------|
+|network.py| Contains class defining the MPNN+LSTM network.|
+|model.py| Run this file to train/forecast with the model.|
+|hparams.json| File contains hyperparameters to modify the model.|
+
+Other files in under GNN/ include some of our other work.
+
+#### Using model.py
+
+The file ``model.py`` can train or make forecasts using an existing model. You can find an prebuilt model under ``example/model/``. Note that ``hparams.json`` requiers parameter changes based on where the existing model is located. Make sure to change the following params in ``hparam.json`` if required.
+
+|Parameter|Description|
+|---------|-----------|
+|lossfile|Destination of output for loss file if training the model.|
+|forecastfile|Destination for forecast data.|
+|checkpoint|Destination of existing model to load.|
+
+There are 1 params that model.py accepts given below. If you modified the params in ``hparams.json`` correctly, you can simply run ``model.py``.
+|Parameter|Description|
+|---------|-----------|
+|--Run|(Train\|Forecast)|
+
+Example:
+
+``python model.py --Run Forecast``
